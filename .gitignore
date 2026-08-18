@@ -1,2 +1,7 @@
 venv/
 cooking_bot.db
+data/
+__pycache__/
+*.pyc
+.env
+logs/
