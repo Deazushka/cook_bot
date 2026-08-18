@@ -454,8 +454,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # Main Application
 # ============================================================
 
-async def async_main() -> None:
-    """Async entry point for the bot."""
+def main() -> None:
+    """Start the bot."""
     if not BOT_TOKEN:
         logger.error("No BOT_TOKEN found in environment variables!")
         return
@@ -481,23 +481,10 @@ async def async_main() -> None:
     application.add_handler(MessageHandler(filters.Regex("❓ Помощь"), lambda u, c: help_command(u, c)))
     
     # Start the bot with polling mode
-    # Polling mode is simpler for Render Free Tier
-    # The bot will check for updates every few seconds
-    # timeout=20 means it will wait up to 20 seconds for an update
-    # drop_pending_updates=True will ignore updates that came while the bot was offline
     logger.info("Starting bot with polling mode...")
     
-    # Run polling - this will keep the bot running and checking for updates
-    await application.run_polling(drop_pending_updates=True, timeout=20)
-
-
-def main() -> None:
-    """Synchronous entry point that runs the async async_main."""
-    try:
-        asyncio.run(async_main())
-    except (KeyboardInterrupt, SystemExit):
-        # Clean shutdown
-        logger.info("Bot stopped")
+    # Run polling - this will handle the event loop internally
+    application.run_polling(drop_pending_updates=True, timeout=20)
 
 
 if __name__ == "__main__":
