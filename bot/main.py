@@ -12,6 +12,8 @@ import json
 from datetime import datetime
 from dotenv import load_dotenv
 from typing import Optional, List, Dict, Any
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Load environment variables
 load_dotenv()
@@ -61,6 +63,37 @@ CATEGORY_KEYBOARD = [
 ]
 
 main_keyboard = ReplyKeyboardMarkup(CATEGORY_KEYBOARD, resize_keyboard=True, one_time_keyboard=False)
+
+
+# ============================================================
+# Health Check Server
+# ============================================================
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path in ['/healthz', '/']:
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'OK')
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def log_message(self, format, *args):
+        # Suppress default HTTP server logs
+        pass
+
+
+def start_health_check_server():
+    """Start a simple HTTP server for health checks in a background thread."""
+    try:
+        port = int(os.getenv("PORT", 8000))
+        server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+        logger.info(f"Health check server started on port {port}")
+        server.serve_forever()
+    except Exception as e:
+        logger.error(f"Health check server error: {e}")
 
 
 # ============================================================
@@ -455,10 +488,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # ============================================================
 
 def main() -> None:
-    """Start the bot."""
+    """Start the bot with health check server."""
     if not BOT_TOKEN:
         logger.error("No BOT_TOKEN found in environment variables!")
         return
+    
+    # Start health check server in background thread
+    health_thread = threading.Thread(target=start_health_check_server, daemon=True)
+    health_thread.start()
+    logger.info("Health check server thread started")
     
     # Create application using Application.builder() pattern (PTB 20+)
     # This is the recommended pattern for python-telegram-bot 20+
