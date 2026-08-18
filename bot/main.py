@@ -396,7 +396,7 @@ def main() -> None:
     
     # Create Updater instance (more compatible across environments than Application.builder())
     # This pattern works well on both local and Render
-    updater = Updater(BOT_TOKEN, use_context=True)
+    updater = Updater(BOT_TOKEN)
     
     dispatcher = updater.dispatcher
     
