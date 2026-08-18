@@ -556,6 +556,7 @@ def main() -> None:
     
     # Define error handler
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        print("ERROR HANDLER CALLED", flush=True)
         logger.info("Error handler called")
         logger.error(msg="Exception while handling an update:", exc_info=context.error)
     # Add error handler
