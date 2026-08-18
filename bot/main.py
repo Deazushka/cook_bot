@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Import Telegram bot components
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, Message
 from telegram.ext import (
-    Application, Updater, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+    Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 )
 
 # Import database functions
@@ -394,9 +394,9 @@ def main() -> None:
         logger.error("No BOT_TOKEN found in environment variables!")
         return
     
-    # Create Updater instance (more compatible across environments than Application.builder())
-    # This pattern works well on both local and Render
-    updater = Updater(BOT_TOKEN)
+    # Create application
+    # Using Application.builder() for PTB 20+ - this is the recommended pattern
+    application = Application.builder().token(BOT_TOKEN).build()
     
     dispatcher = updater.dispatcher
     
