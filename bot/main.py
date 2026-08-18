@@ -551,13 +551,16 @@ def main() -> None:
     # Create application using Application.builder() pattern (PTB 20+)
     # This is the recommended pattern for python-telegram-bot 20+
     application = Application.builder().token(BOT_TOKEN).build()
+    logger.info(f"Application created: {application}")
+    logger.info(f"Error handlers before adding: {application.error_handlers}")
     
     # Define error handler
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        logger.info("Error handler called")
         logger.error(msg="Exception while handling an update:", exc_info=context.error)
-    
     # Add error handler
     application.add_error_handler(error_handler)
+    logger.info(f"Error handlers after adding: {application.error_handlers}")
     
     # Add command handlers
     application.add_handler(CommandHandler("start", start_command))
