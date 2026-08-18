@@ -537,13 +537,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # Main Application
 # ============================================================
 
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log the error and send a telegram message to notify the developer."""
-    logger.error(msg="Exception while handling an update:", exc_info=context.error)
-    # Optionally, you can send a message to a developer chat here
-    # but we'll just log for now.
-
-
 def main() -> None:
     """Start the bot with health check server."""
     if not BOT_TOKEN:
@@ -558,6 +551,13 @@ def main() -> None:
     # Create application using Application.builder() pattern (PTB 20+)
     # This is the recommended pattern for python-telegram-bot 20+
     application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Define error handler
+    async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        logger.error(msg="Exception while handling an update:", exc_info=context.error)
+    
+    # Add error handler
+    application.add_error_handler(error_handler)
     
     # Add command handlers
     application.add_handler(CommandHandler("start", start_command))
@@ -574,9 +574,6 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.Regex("🎲 Случайное"), lambda u, c: choose_dish_command(u, c)))
     application.add_handler(MessageHandler(filters.Regex("➕ Добавить рецепт"), lambda u, c: add_recipe_manual(u, c)))
     application.add_handler(MessageHandler(filters.Regex("❓ Помощь"), lambda u, c: help_command(u, c)))
-    
-    # Add error handler
-    application.add_error_handler(error_handler)
     
     # Start the bot with polling mode
     logger.info("Starting bot with polling mode...")
