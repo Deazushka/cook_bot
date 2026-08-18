@@ -22,18 +22,13 @@ class Database:
         self._connect()
     
     def _connect(self):
-        """Establish SQLite database connection."""
-        # Determine the database path:
-        # 1. If DATABASE_URL is a full SQLite path, use it directly.
-        # 2. Otherwise, place the DB inside DATA_DIR (so it can live on the
-        #    persistent disk/volume mounted by the hosting platform).
-        db_path = os.getenv("DATABASE_URL")
-        
-        if not db_path or db_path.startswith("postgresql"):
-            # Fall back to SQLite in the data directory
-            data_dir = os.getenv("DATA_DIR", "data")
-            os.makedirs(data_dir, exist_ok=True)
-            db_path = os.path.join(data_dir, "cooking_bot.db")
+        """Establish SQLite database connection using internal DATA_DIR."""
+        # Use DATA_DIR environment variable for the database path.
+        # This allows the hosting platform (Koyeb, Render, etc.) to mount a
+        # persistent volume and set DATA_DIR to point to it.
+        data_dir = os.getenv("DATA_DIR", "data")
+        os.makedirs(data_dir, exist_ok=True)
+        db_path = os.path.join(data_dir, "cooking_bot.db")
         
         try:
             self.conn = sqlite3.connect(db_path)
