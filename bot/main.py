@@ -16,6 +16,9 @@ from typing import Optional, List, Dict, Any
 # Load environment variables
 load_dotenv()
 
+# Recipe source URL
+RECIPE_SOURCE_URL = "https://www.iamcook.ru/event/everyday/everyday-diet"
+
 # Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -131,7 +134,7 @@ def determine_category_from_text(text: str) -> str:
     text_lower = text.lower()
     
     # Meat keywords
-    meat_keywords = ['мясо', 'говядина', 'свинина', 'курица', 'Индейка', 'лечо', 'барина']
+    meat_keywords = ['мясо', 'говядина', 'свинина', 'курица', 'Индейка', 'лечо', 'баранина']
     # Garnish/side keywords
     garnish_keywords = ['картофель', 'рис', 'гречка', 'макароны', 'овощи']
     # Soup keywords
@@ -164,7 +167,7 @@ def determine_category(title: str) -> str:
     # Garnish/side keywords
     garnish_keywords = ['картофель', 'рис', 'гречка', 'гречка', 'макароны', 'макаронные', 'вязка', 'запекание', 'булка']
     # Soup keywords
-    soup_keywords = ['суп', 'борщ', 'щьи', 'солянка', 'тушон', 'жабий', 'крем-соуп']
+    soup_keywords = ['суп', 'борщ', 'щиьи', 'солянка', 'тушон', 'жабий', 'крем-соуп']
     # Vegetarian keywords
     veg_keywords = ['салат', 'вегетариан', 'овощи', 'зелень']
     # Dessert keywords
@@ -188,6 +191,77 @@ def determine_category(title: str) -> str:
             return "soup"
         else:
             return "all"
+
+
+async def filter_recipes_by_keyword(update: Update, context: ContextTypes.DEFAULT_TYPE, category: str) -> None:
+    """Filter recipes by category and send a random one."""
+    db = context.user_data.get('db')
+    if not db:
+        from database import Database
+        db = Database()
+        context.user_data['db'] = db
+    
+    # Get recipes filtered by category
+    recipes = db.get_recipes_by_category(category)
+    
+    if not recipes:
+        await update.message.reply_text(
+            f"📭 В категории {CATEGORY_TRANSLATIONS.get(category, category)} пока нет рецептов.\n"
+            "Попробуйте другую категорию или добавьте рецепты командой /add_recipe.",
+            reply_markup=main_keyboard
+        )
+        return
+    
+    # Select a random recipe from filtered results
+    import random
+    recipe = random.choice(recipes)
+    
+    category_name = CATEGORY_TRANSLATIONS.get(recipe["category"], recipe["category"])
+    url = recipe.get("url", "#")
+    message = (
+        f"🍽️ <b>{recipe['title']}</b>\n"
+        f"📂 Категория: {category_name}\n"
+        f"🔗 <a href='{url}'>Читать полный рецепт</a>\n\n"
+        "Что дальше?"
+    )
+    
+    await update.message.reply_text(
+        message, 
+        parse_mode='HTML', 
+        reply_markup=main_keyboard,
+        disable_web_page_preview=False
+    )
+
+
+async def add_recipe_manual(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle manual recipe addition request."""
+    user = update.effective_user
+    db = context.user_data.get('db')
+    if not db:
+        from database import Database
+        db = Database()
+        context.user_data['db'] = db
+    
+    # Ensure user exists in database
+    db.ensure_user(user.id, user.username or "unknown")
+    
+    await update.message.reply_text(
+        "📝 Чтобы добавить свой рецепт, отправьте мне сообщение в следующем формате:\n\n"
+        "<b>Название рецепта</b>\n"
+        "<b>Ингредиенты:</b> список ингредиентов через запятую\n"
+        "<b>Время приготовления:</b> в минутах (число)\n"
+        "<b>Категория:</b> мясо/гарнир/вегетарианское/суп/десерт\n"
+        "<b>Источник:</b> (опционально) URL или описание источника\n\n"
+        "Пример:\n"
+        "Борщ украинский\n"
+        "Ингредиенты: свекла, капуста, картофель, лук, морковь, томатная паста\n"
+        "Время приготовления: 90\n"
+        "Категория: суп\n"
+        "Источник: мамина рецептная тетрадь\n\n"
+        "Отправьте рецепт одним сообщением, и я сохраню его для вас!",
+        parse_mode='HTML',
+        reply_markup=main_keyboard
+    )
 
 
 # ============================================================
@@ -274,7 +348,7 @@ async def choose_dish_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not all_recipes:
             await update.message.reply_text(
                 "📭 Рецепты еще не добавлены.\n"
-                "Используйте кнопку '➕ Добавить рецепт' или команду /add_recipe, "
+                "Используйте кнопку '➕ Добавить рецепт' или команда /add_recipe, "
                 "или яFETCH новый рецепт с iamcook.ru"
             )
             return
@@ -359,7 +433,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     import random
     recipe = random.choice(recipes)
     
-    category_name = CATEGORY_TRANSLATIONS.get(category, category)
+    category_name = CATEGORY_TRANSLATIONS.get(recipe["category"], recipe["category"])
     url = recipe.get("url", "#")
     message = (
         f"🍽️ <b>{recipe['title']}</b>\n"
@@ -424,3 +498,7 @@ def main() -> None:
     except (KeyboardInterrupt, SystemExit):
         # Clean shutdown
         logger.info("Bot stopped")
+
+
+if __name__ == "__main__":
+    main()
