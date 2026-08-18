@@ -16,20 +16,33 @@ logger = logging.getLogger(__name__)
 
 class Database:
     """Database handler for the cooking bot using SQLite."""
-    
+
     def __init__(self):
         self.conn = None
         self._connect()
-    
+
     def _connect(self):
         """Establish SQLite database connection using internal DATA_DIR."""
         # Use DATA_DIR environment variable for the database path.
         # This allows the hosting platform (Koyeb, Render, etc.) to mount a
         # persistent volume and set DATA_DIR to point to it.
         data_dir = os.getenv("DATA_DIR", "data")
-        os.makedirs(data_dir, exist_ok=True)
         db_path = os.path.join(data_dir, "cooking_bot.db")
-        
+
+        # Ensure the data directory exists
+        try:
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir, exist_ok=True)
+                logger.info(f"Created data directory: {data_dir}")
+            elif not os.path.isdir(data_dir):
+                raise RuntimeError(f"DATA_DIR path {data_dir} exists but is not a directory")
+        except PermissionError:
+            # If we can't create the directory, check if it already exists
+            if os.path.exists(data_dir) and os.path.isdir(data_dir):
+                logger.info(f"Data directory {data_dir} already exists, continuing despite permission error")
+            else:
+                raise  # Re-raise if we truly can't create or access the directory
+
         try:
             self.conn = sqlite3.connect(db_path)
             self.conn.row_factory = sqlite3.Row  # Enable dict-like access
@@ -40,7 +53,7 @@ class Database:
         except Exception as e:
             logger.error(f"Failed to connect to database: {e}")
             raise
-    
+
     def _create_tables(self):
         """Create all necessary tables if they don't exist."""
         cursor = self.conn.cursor()
@@ -55,7 +68,7 @@ class Database:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            
+
             # Recipe categories table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS categories (
@@ -64,7 +77,7 @@ class Database:
                     description TEXT
                 )
             """)
-            
+
             # Recipes table - stores recipes from source and user-added
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS recipes (
@@ -80,7 +93,7 @@ class Database:
                     times_cooked INTEGER DEFAULT 0
                 )
             """)
-            
+
             # User-recipe junction table - tracks which user saved which recipe
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS user_recipes (
@@ -91,7 +104,7 @@ class Database:
                     PRIMARY KEY (user_id, recipe_id)
                 )
             """)
-            
+
             # Cooking history table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS cooking_history (
@@ -103,7 +116,7 @@ class Database:
                     notes TEXT
                 )
             """)
-            
+
             # Insert default categories if not exist
             cursor.execute("""
                 INSERT INTO categories (name, description) VALUES
@@ -117,10 +130,10 @@ class Database:
             """)
         finally:
             cursor.close()
-        
+
         self.conn.commit()
         logger.info("Database tables created/verified")
-    
+
     def ensure_user(self, user_id: int, username: str = "unknown") -> None:
         """Ensure user exists in database, insert if not."""
         with self.conn:
@@ -128,8 +141,8 @@ class Database:
                 "INSERT INTO users (user_id, username) VALUES (?, ?) ON CONFLICT (user_id) DO NOTHING",
                 (user_id, username)
             )
-    
-    def upsert_recipe(self, title: str, source_url: Optional[str], category: str, 
+
+    def upsert_recipe(self, title: str, source_url: Optional[str], category: str,
                       source: str = "iamcook.ru", ingredients: Optional[str] = None,
                       cooking_time: Optional[int] = None, added_by: Optional[int] = None) -> int:
         """Insert or update a recipe, return recipe id."""
@@ -139,7 +152,7 @@ class Database:
                 "SELECT id FROM recipes WHERE title = ? AND source_url = ? AND source = ?",
                 (title, source_url, source)
             ).fetchone()
-            
+
             if existing:
                 recipe_id = existing[0]
                 # Update times_cooked
@@ -150,52 +163,52 @@ class Database:
                 return recipe_id
             else:
                 self.conn.execute(
-                    """INSERT INTO recipes 
-                       (title, source_url, category, source, ingredients, cooking_time, added_by) 
+                    """INSERT INTO recipes
+                       (title, source_url, category, source, ingredients, cooking_time, added_by)
                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
                     (title, source_url, category, source, ingredients, cooking_time, added_by)
                 )
                 recipe_id = self.conn.execute("SELECT last_insert_rowid()").fetchone()[0]
                 return recipe_id
-    
+
     def get_recipes_by_category(self, category: str = "all") -> List[Dict[str, Any]]:
         """Get recipes filtered by category."""
         category_map = {
             "all": "all",
-            "meat": "meat", 
+            "meat": "meat",
             "garnish": "garnish",
             "vegetarian": "vegetarian",
             "soup": "soup",
             "dessert": "dessert"
         }
         norm_category = category_map.get(category.lower(), "all")
-        
+
         rows = self.conn.execute(
             "SELECT * FROM recipes WHERE category = ? ORDER BY RANDOM() LIMIT 10",
             (norm_category,)
         ).fetchall()
-        
+
         return [dict(row) for row in rows] if rows else []
-    
+
     def get_user_recipes(self, user_id: int) -> List[Dict[str, Any]]:
         """Get all recipes saved by a specific user."""
         rows = self.conn.execute("""
-            SELECT r.*, ur.times_cooked as user_times 
-            FROM recipes r 
-            JOIN user_recipes ur ON r.id = ur.recipe_id 
-            WHERE ur.user_id = ? 
+            SELECT r.*, ur.times_cooked as user_times
+            FROM recipes r
+            JOIN user_recipes ur ON r.id = ur.recipe_id
+            WHERE user_id = ?
             ORDER BY ur.saved_at DESC
         """, (user_id,)).fetchall()
-        
+
         return [dict(row) for row in rows] if rows else []
-    
+
     def save_recipe_for_user(self, user_id: int, recipe_id: int) -> bool:
         """Save a recipe for a user (add to their collection)."""
         try:
             self.conn.execute(
-                """INSERT INTO user_recipes (user_id, recipe_id) 
-                   VALUES (?, ?) 
-                   ON CONFLICT (user_id, recipe_id) 
+                """INSERT INTO user_recipes (user_id, recipe_id)
+                   VALUES (?, ?)
+                   ON CONFLICT (user_id, recipe_id)
                    DO UPDATE SET saved_at = CURRENT_TIMESTAMP""",
                 (user_id, recipe_id)
             )
@@ -203,17 +216,17 @@ class Database:
         except Exception as e:
             logger.error(f"Error saving recipe for user: {e}")
             return False
-    
+
     def record_cooking(self, user_id: int, recipe_id: int, rating: int = 0, notes: str = "") -> int:
         """Record that a user cooked a recipe."""
         try:
             cursor = self.conn.execute(
-                """INSERT INTO cooking_history (user_id, recipe_id, rating, notes) 
+                """INSERT INTO cooking_history (user_id, recipe_id, rating, notes)
                    VALUES (?, ?, ?, ?)""",
                 (user_id, recipe_id, rating, notes)
             )
             history_id = cursor.lastrowid
-            
+
             # Update times_cooked in user_recipes
             self.conn.execute(
                 "UPDATE user_recipes SET times_cooked = times_cooked + 1 WHERE user_id = ? AND recipe_id = ?",
@@ -223,12 +236,12 @@ class Database:
         except Exception as e:
             logger.error(f"Error recording cooking: {e}")
             return 0
-    
+
     def search_recipes(self, query: str, category: str = "all") -> List[Dict[str, Any]]:
         """Search recipes by keyword in title."""
         category_map = {
             "all": "all",
-            "meat": "meat", 
+            "meat": "meat",
             "garnish": "garnish",
             "vegetarian": "vegetarian",
             "soup": "soup",
@@ -236,17 +249,17 @@ class Database:
         }
         norm_category = category_map.get(category.lower(), "all")
         search_query = f"%{query}%"
-        
+
         rows = self.conn.execute(
-            """SELECT * FROM recipes 
-               WHERE (title LIKE ? OR ingredients LIKE ?) 
-               AND (? = 'all' OR category = ?) 
+            """SELECT * FROM recipes
+               WHERE (title LIKE ? OR ingredients LIKE ?)
+               AND (? = 'all' OR category = ?)
                ORDER BY RANDOM() LIMIT 10""",
             (search_query, search_query, norm_category, norm_category)
         ).fetchall()
-        
+
         return [dict(row) for row in rows] if rows else []
-    
+
     def close(self):
         """Close database connection."""
         if self.conn:

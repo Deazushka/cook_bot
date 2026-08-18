@@ -19,7 +19,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 load_dotenv()
 
 # Recipe source URL
-RECIPE_SOURCE_URL = "https://www.iamcook.ru/event/everyday/everyday-diet"
+RECIPE_SOURCE_URL = "https://www.iamcook.ru/event/everyday/everyday-dilt"
 
 # Configure logging
 logging.basicConfig(
@@ -363,7 +363,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             "• Нажмите кнопку '🥩 Мясо' — покажет только мясные блюда\n"
             "• Нажмите кнопку '🥦 Гарнир' — покажет гарниры\n"
             "• Нажмите '🎲 Случайное' — случайный рецепт из всех категорий\n\n"
-            "🌐 Источник рецептов: https://www.iamcook.ru/event/everyday/everyday-diet"
+            "🌐 Источник рецептов: https://www.iamcook.ru/event/everyday/everyday-dilt"
         )
         
         await update.message.reply_text(help_text, parse_mode='HTML', reply_markup=main_keyboard)
@@ -427,7 +427,7 @@ async def choose_dish_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             "Что сделаем дальше?\n"
             "• Сохранить в мои рецепты ✅\n"
             "• Еще один случайный 🎲\n"
-            "• Фильтровать по category 🔍"
+            "• Фильтровать по категории 🔍"
         )
         
         await update.message.reply_text(
@@ -537,7 +537,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # Main Application
 # ============================================================
 
-def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log the error and send a telegram message to notify the developer."""
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
     # Optionally, you can send a message to a developer chat here
