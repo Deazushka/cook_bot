@@ -18,7 +18,7 @@ load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(level)s - %(message)s',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
@@ -38,12 +38,6 @@ from database import Database
 # Configuration
 # ============================================================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "https://your-app.onrender.com")
-WEBHOOK_PATH = f"/{BOT_TOKEN}"
-WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
-
-# Recipe source URL
-RECIPE_SOURCE_URL = "https://www.iamcook.ru/event/everyday/everyday-diet"
 
 # Category mapping for filtering
 CATEGORY_TRANSLATIONS = {
@@ -137,7 +131,7 @@ def determine_category_from_text(text: str) -> str:
     text_lower = text.lower()
     
     # Meat keywords
-    meat_keywords = ['мясо', 'говядина', 'свинина', 'курица', 'Индейка', 'лечо', 'баранина']
+    meat_keywords = ['мясо', 'говядина', 'свинина', 'курица', 'Индейка', 'лечо', 'барина']
     # Garnish/side keywords
     garnish_keywords = ['картофель', 'рис', 'гречка', 'макароны', 'овощи']
     # Soup keywords
@@ -280,7 +274,7 @@ async def choose_dish_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not all_recipes:
             await update.message.reply_text(
                 "📭 Рецепты еще не добавлены.\n"
-                "Используйте кнопку '➕ Добавить рецепт' или команда /add_recipe, "
+                "Используйте кнопку '➕ Добавить рецепт' или команду /add_recipe, "
                 "или яFETCH новый рецепт с iamcook.ru"
             )
             return
@@ -382,14 +376,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
 
 
-# ... (more handlers would continue: my_recipes, add_recipe, history, etc.)
-
 # ============================================================
 # Main Application
 # ============================================================
 
-def main() -> None:
-    """Start the bot."""
+async def async_main() -> None:
+    """Async entry point for the bot."""
     if not BOT_TOKEN:
         logger.error("No BOT_TOKEN found in environment variables!")
         return
@@ -422,4 +414,13 @@ def main() -> None:
     logger.info("Starting bot with polling mode...")
     
     # Run polling - this will keep the bot running and checking for updates
-    application.run_polling(drop_pending_updates=True, timeout=20)
+    await application.run_polling(drop_pending_updates=True, timeout=20)
+
+
+def main() -> None:
+    """Synchronous entry point that runs the async async_main."""
+    try:
+        asyncio.run(async_main())
+    except (KeyboardInterrupt, SystemExit):
+        # Clean shutdown
+        logger.info("Bot stopped")
