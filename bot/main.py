@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Import Telegram bot components
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, Message
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+    Application, Updater, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 )
 
 # Import database functions
@@ -394,34 +394,53 @@ def main() -> None:
         logger.error("No BOT_TOKEN found in environment variables!")
         return
     
-    # Create application
-    application = Application.builder().token(BOT_TOKEN).build()
+    # Create Updater instance (more compatible across environments than Application.builder())
+    # This pattern works well on both local and Render
+    updater = Updater(BOT_TOKEN, use_context=True)
+    
+    dispatcher = updater.dispatcher
     
     # Add command handlers
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("choose_dish", choose_dish_command))
-    application.add_handler(CommandHandler("filter", filter_command))
+    dispatcher.add_handler(CommandHandler("start", start_command))
+    dispatcher.add_handler(CommandHandler("help", help_command))
+    dispatcher.add_handler(CommandHandler("choose_dish", choose_dish_command))
+    dispatcher.add_handler(CommandHandler("filter", filter_command))
     
     # Add callback query handler for inline buttons
-    application.add_handler(CallbackQueryHandler(button_callback, pattern=r"^filter_"))
+    dispatcher.add_handler(CallbackQueryHandler(button_callback, pattern=r"^filter_"))
     
     # Add message handler for keyboard buttons
-    application.add_handler(MessageHandler(filters.Regex("🥩 Мясо"), lambda u, c: filter_recipes_by_keyword(u, c, "meat")))
-    application.add_handler(MessageHandler(filters.Regex("🥦 Гарнир"), lambda u, c: filter_recipes_by_keyword(u, c, "garnish")))
-    application.add_handler(MessageHandler(filters.Regex("🎲 Случайное"), lambda u, c: choose_dish_command(u, c)))
-    application.add_handler(MessageHandler(filters.Regex("➕ Добавить рецепт"), lambda u, c: add_recipe_manual(u, c)))
-    application.add_handler(MessageHandler(filters.Regex("❓ Помощь"), lambda u, c: help_command(u, c)))
+    dispatcher.add_handler(MessageHandler(filters.Regex("🥩 Мясо"), lambda u, c: filter_recipes_by_keyword(u, c, "meat")))
+    dispatcher.add_handler(MessageHandler(filters.Regex("🥦 Гарнир"), lambda u, c: filter_recipes_by_keyword(u, c, "garnish")))
+    dispatcher.add_handler(MessageHandler(filters.Regex("🎲 Случайное"), lambda u, c: choose_dish_command(u, c)))
+    dispatcher.add_handler(MessageHandler(filters.Regex("➕ Добавить рецепт"), lambda u, c: add_recipe_manual(u, c)))
+    dispatcher.add_handler(MessageHandler(filters.Regex("❓ Помощь"), lambda u, c: help_command(u, c)))
     
     # Start the bot with webhook
     # For Render, we'll use webhook mode
     logger.info("Starting bot...")
-    application.run_webhook(
+    
+    # Webhook setup
+    PORT = int(os.environ.get("PORT", 8080))
+    WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "https://your-app.onrender.com")
+    WEBHOOK_PATH = f"/{BOT_TOKEN}"
+    WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+    
+    # Remove webhook first to avoid conflicts
+    updater.bot.delete_webhook()
+    
+    # Set webhook
+    updater.bot.set_webhook(url=WEBHOOK_URL)
+    
+    # Start webhook listener
+    updater.start_webhook(
         listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 8080)),
-        url_path=BOT_TOKEN,
-        webhook_url=WEBHOOK_URL
+        port=PORT,
+        url_path=BOT_TOKEN
     )
+    
+    # Keep the bot running
+    updater.idle()
 
 
 # --- Handler Functions ---
