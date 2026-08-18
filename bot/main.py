@@ -170,7 +170,7 @@ def determine_category(title: str) -> str:
     # Garnish/side keywords
     garnish_keywords = ['картофель', 'рис', 'гречка', 'гречка', 'макароны', 'макаронные', 'вязка', 'запекание', 'булка']
     # Soup keywords
-    soup_keywords = ['суп', 'борщ', 'щьи', 'солянка', 'тушون', 'жабий', 'крем-соуп']
+    soup_keywords = ['суп', 'борщ', 'щьи', 'солянка', 'тушон', 'жабий', 'крем-соуп']
     # Vegetarian keywords
     veg_keywords = ['салат', 'вегетариан', 'овощи', 'зелень']
     # Dessert keywords
@@ -394,312 +394,32 @@ def main() -> None:
         logger.error("No BOT_TOKEN found in environment variables!")
         return
     
-    # Create application
-    # Using Application.builder() for PTB 20+ - this is the recommended pattern
+    # Create application using Application.builder() pattern (PTB 20+)
+    # This is the recommended pattern for python-telegram-bot 20+
     application = Application.builder().token(BOT_TOKEN).build()
     
-    dispatcher = updater.dispatcher
-    
     # Add command handlers
-    dispatcher.add_handler(CommandHandler("start", start_command))
-    dispatcher.add_handler(CommandHandler("help", help_command))
-    dispatcher.add_handler(CommandHandler("choose_dish", choose_dish_command))
-    dispatcher.add_handler(CommandHandler("filter", filter_command))
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("choose_dish", choose_dish_command))
+    application.add_handler(CommandHandler("filter", filter_command))
     
     # Add callback query handler for inline buttons
-    dispatcher.add_handler(CallbackQueryHandler(button_callback, pattern=r"^filter_"))
+    application.add_handler(CallbackQueryHandler(button_callback, pattern=r"^filter_"))
     
     # Add message handler for keyboard buttons
-    dispatcher.add_handler(MessageHandler(filters.Regex("🥩 Мясо"), lambda u, c: filter_recipes_by_keyword(u, c, "meat")))
-    dispatcher.add_handler(MessageHandler(filters.Regex("🥦 Гарнир"), lambda u, c: filter_recipes_by_keyword(u, c, "garnish")))
-    dispatcher.add_handler(MessageHandler(filters.Regex("🎲 Случайное"), lambda u, c: choose_dish_command(u, c)))
-    dispatcher.add_handler(MessageHandler(filters.Regex("➕ Добавить рецепт"), lambda u, c: add_recipe_manual(u, c)))
-    dispatcher.add_handler(MessageHandler(filters.Regex("❓ Помощь"), lambda u, c: help_command(u, c)))
+    application.add_handler(MessageHandler(filters.Regex("🥩 Мясо"), lambda u, c: filter_recipes_by_keyword(u, c, "meat")))
+    application.add_handler(MessageHandler(filters.Regex("🥦 Гарнир"), lambda u, c: filter_recipes_by_keyword(u, c, "garnish")))
+    application.add_handler(MessageHandler(filters.Regex("🎲 Случайное"), lambda u, c: choose_dish_command(u, c)))
+    application.add_handler(MessageHandler(filters.Regex("➕ Добавить рецепт"), lambda u, c: add_recipe_manual(u, c)))
+    application.add_handler(MessageHandler(filters.Regex("❓ Помощь"), lambda u, c: help_command(u, c)))
     
-    # Start the bot with webhook
-    # For Render, we'll use webhook mode
-    logger.info("Starting bot...")
+    # Start the bot with polling mode
+    # Polling mode is simpler for Render Free Tier
+    # The bot will check for updates every few seconds
+    # timeout=20 means it will wait up to 20 seconds for an update
+    # drop_pending_updates=True will ignore updates that came while the bot was offline
+    logger.info("Starting bot with polling mode...")
     
-    # Webhook setup
-    PORT = int(os.environ.get("PORT", 8080))
-    WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "https://your-app.onrender.com")
-    WEBHOOK_PATH = f"/{BOT_TOKEN}"
-    WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
-    
-    # Remove webhook first to avoid conflicts
-    updater.bot.delete_webhook()
-    
-    # Set webhook
-    updater.bot.set_webhook(url=WEBHOOK_URL)
-    
-    # Start webhook listener
-    updater.start_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=BOT_TOKEN
-    )
-    
-    # Keep the bot running
-    updater.idle()
-
-
-# --- Handler Functions ---
-
-async def filter_recipes_by_keyword(update: Update, context: ContextTypes.DEFAULT_TYPE, category: str) -> None:
-    """Handle keyboard button clicks for category filtering."""
-    db = context.user_data.get('db')
-    if not db:
-        from bot.database import Database
-        db = Database()
-        context.user_data['db'] = db
-    
-    recipes = db.get_recipes_by_category(category)
-    
-    if not recipes:
-        category_name = CATEGORY_TRANSLATIONS.get(category, category)
-        text = f"📭 В категории {category_name} пока нет рецептов."
-        if update.message:
-            await update.message.reply_text(text, reply_markup=main_keyboard)
-        else:
-            await update.callback_query.edit_message_text(text, reply_markup=main_keyboard)
-        return
-    
-    import random
-    recipe = random.choice(recipes)
-    
-    category_name = CATEGORY_TRANSLATIONS.get(category, category)
-    message = (
-        f"🍽️ <b>{recipe['title']}</b>\n"
-        f"📂 Категория: {category_name}\n"
-        f"🔗 <a href='{recipe.get('url', '#')}'>Читать полный рецепт</a>\n\n"
-        "Что дальше?"
-    )
-    
-    if update.message:
-        await update.message.reply_text(message, parse_mode='HTML', reply_markup=main_keyboard)
-    else:
-        await update.callback_query.edit_message_text(message, parse_mode='HTML', reply_markup=main_keyboard)
-
-
-async def add_recipe_manual(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle manual recipe addition."""
-    user = update.effective_user
-    db = context.user_data.get('db')
-    if not db:
-        from bot.database import Database
-        db = Database()
-        context.user_data['db'] = db
-    
-    db.ensure_user(user.id, user.username or "unknown")
-    
-    if update.message:
-        await update.message.reply_text(
-            "📝 <b>Добавление рецепта вручную</b>\n\n"
-            "Пожалуйста, отправьте мне рецепт в следующем формате:\n"
-            "Название рецепта\n"
-            "Категория (мясо, гарнир, суп, десерт, вегетарианское)\n"
-            "Ингредиенты (список через запятую)\n"
-            "Время приготовления (минуты)\n\n"
-            "Или просто отправьте название, и я попробую определить категорию автоматически.",
-            parse_mode='HTML', reply_markup=main_keyboard
-        )
-    
-    # Set state to wait for recipe info
-    context.user_data['awaiting_recipe'] = True
-
-
-async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle general text messages from users."""
-    user = update.effective_user
-    db = context.user_data.get('db')
-    if not db:
-        from bot.database import Database
-        db = Database()
-        context.user_data['db'] = db
-    
-    db.ensure_user(user.id, user.username or "unknown")
-    
-    text = update.message.text.strip()
-    
-    # Check if user is waiting to add a recipe
-    if context.user_data.get('awaiting_recipe'):
-        await _process_new_recipe_manual(update, context, text)
-        return
-    
-    # Handle text commands as alternatives to keyboard
-    if text in ["Мясо", "мясо", "Meat"]:
-        await filter_recipes_by_keyword(update, context, "meat")
-    elif text in ["Гарнир", "гарнир", "Garnish"]:
-        await filter_recipes_by_keyword(update, context, "garnish")
-    elif text in ["Случайное", "случайное", "Random"]:
-        await choose_dish_command(update, context)
-    elif text in ["Мои рецепты", "мои рецепты", "My Recipes"]:
-        await my_recipes_command(update, context)
-    elif text in ["История", "история", "History"]:
-        await history_command(update, context)
-    else:
-        # Default: try to find a recipe or show help hint
-        await update.message.reply_text(
-            "Я не понял ваш запрос. Используйте кнопки меню ниже или команду /help.",
-            reply_markup=main_keyboard
-        )
-
-
-async def _process_new_recipe_manual(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
-    """Process manually added recipe from text."""
-    from bs4 import BeautifulSoup
-    import requests
-    
-    db = context.user_data.get('db')
-    if not db:
-        from bot.database import Database
-        db = Database()
-        context.user_data['db'] = db
-    
-    user = update.effective_user
-    db.ensure_user(user.id, user.username or "unknown")
-    
-    # Parse the recipe info from text
-    lines = [l.strip() for l in text.split('\n') if l.strip()]
-    
-    if not lines:
-        await update.message.reply_text("❌ Пустой текст. Пожалуйста, отправьте формат: название, категория, ингредиенты, время")
-        return
-    
-    # Try to extract information
-    title = lines[0]
-    category = "all"
-    ingredients = ""
-    cooking_time = 0
-    
-    if len(lines) >= 2:
-        cat_input = lines[1].lower()
-        if cat_input in ['мясо', 'meat', 'meat dish']:
-            category = 'meat'
-        elif cat_input in ['гарнир', 'garnish', 'side dish']:
-            category = 'garnish'
-        elif cat_input in ['суп', 'soup']:
-            category = 'soup'
-        elif cat_input in ['десерт', 'dessert', ' dessert']:
-            category = 'dessert'
-        elif cat_input in ['вегетарианское', 'vegetarian']:
-            category = 'vegetarian'
-        else:
-            category = cat_input
-    
-    if len(lines) >= 3:
-        ingredients = lines[2]
-    
-    if len(lines) >= 4:
-        try:
-            cooking_time = int(lines[3])
-        except ValueError:
-            cooking_time = 0
-    
-    # Upsert the recipe
-    recipe_id = db.upsert_recipe(
-        title=title,
-        source_url=None,
-        category=category,
-        source='user_added',
-        ingredients=ingredients,
-        cooking_time=cooking_time,
-        added_by=user.id
-    )
-    
-    # Save to user's collection
-    db.save_recipe_for_user(user.id, recipe_id)
-    
-    # Mark as no longer awaiting recipe
-    context.user_data['awaiting_recipe'] = False
-    
-    # Confirmation message
-    category_name = CATEGORY_TRANSLATIONS.get(category, category)
-    message = (
-        f"✅ <b>Рецепт успешно добавлен!</b>\n\n"
-        f"🍽️ <b>{title}</b>\n"
-        f"📂 Категория: {category_name}\n"
-        f"⏱️ Время: {cooking_time} мин\n"
-        f"📝 Ингредиенты: {ingredients}\n\n"
-        "Вы можете найти его в разделе 'Мои рецепты' или выбрать случайное блюдо."
-    )
-    
-    await update.message.reply_text(message, parse_mode='HTML', reply_markup=main_keyboard)
-
-
-async def my_recipes_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show user's saved recipes."""
-    user = update.effective_user
-    db = context.user_data.get('db')
-    if not db:
-        from bot.database import Database
-        db = Database()
-        context.user_data['db'] = db
-    
-    db.ensure_user(user.id, user.username or "unknown")
-    
-    user_recipes = db.get_user_recipes(user.id)
-    
-    if not user_recipes:
-        await update.message.reply_text(
-            "📭 У вас еще нет сохраненных рецептов.\n"
-            "Используйте кнопку '➕ Добавить рецепт', чтобы добавить свои, "
-            "или я_fetch новый рецепт с iamcook.ru.",
-            reply_markup=main_keyboard
-        )
-        return
-    
-    # Show first few recipes
-    message = f"📋 <b>Ваши сохраненные рецепты ({len(user_recipes)})</b>\n\n"
-    for i, recipe in enumerate(user_recipes[:5], 1):
-        category_name = CATEGORY_TRANSLATIONS.get(recipe.get('category', 'all'), recipe.get('category', 'all'))
-        message += f"{i}. <b>{recipe['title']}</b> ({category_name})\n"
-        message += f"   🔗 <a href='{recipe.get('url', '#')}'>Читать</a>\n\n"
-    
-    if len(user_recipes) > 5:
-        message += f"... и еще {len(user_recipes) - 5} рецептов."
-    
-    await update.message.reply_text(message, parse_mode='HTML', reply_markup=main_keyboard)
-
-
-async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show cooking history."""
-    user = update.effective_user
-    db = context.user_data.get('db')
-    if not db:
-        from bot.database import Database
-        db = Database()
-        context.user_data['db'] = db
-    
-    db.ensure_user(user.id, user.username or "unknown")
-    
-    # Get cooking history
-    rows = db.conn.execute(
-        "SELECT r.title, ch.rating, ch.cooked_at FROM cooking_history ch "
-        "JOIN recipes r ON ch.recipe_id = r.id "
-        "WHERE ch.user_id = ? ORDER BY ch.cooked_at DESC LIMIT 5",
-        (user.id,)
-    ).fetchall()
-    
-    if not rows:
-        await update.message.reply_text(
-            "📜 <b>История готовки</b>\n\n"
-            "У вас еще нет записи о готовке рецептов.\n"
-            "Начните готовить и отмечайте свои достижения!",
-            parse_mode='HTML', reply_markup=main_keyboard
-        )
-        return
-    
-    message = "📜 <b>Ваша история готовки:</b>\n\n"
-    for row in rows:
-        rating_stars = "⭐" * row[1] if row[1] else "нет оценки"
-        date = row[2].strftime("%d.%m.%Y") if row[2] else "недавно"
-        message += f"• <b>{row[0]}</b> - {rating_stars} ({date})\n"
-    
-    await update.message.reply_text(message, parse_mode='HTML', reply_markup=main_keyboard)
-
-
-# ... (rest of the file continues)
-
-if __name__ == "__main__":
-    main()
+    # Run polling - this will keep the bot running and checking for updates
+    application.run_polling(drop_pending_updates=True, timeout=20)
