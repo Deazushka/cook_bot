@@ -228,73 +228,87 @@ def determine_category(title: str) -> str:
 
 async def filter_recipes_by_keyword(update: Update, context: ContextTypes.DEFAULT_TYPE, category: str) -> None:
     """Filter recipes by category and send a random one."""
-    db = context.user_data.get('db')
-    if not db:
-        from database import Database
-        db = Database()
-        context.user_data['db'] = db
-    
-    # Get recipes filtered by category
-    recipes = db.get_recipes_by_category(category)
-    
-    if not recipes:
-        await update.message.reply_text(
-            f"📭 В категории {CATEGORY_TRANSLATIONS.get(category, category)} пока нет рецептов.\n"
-            "Попробуйте другую категорию или добавьте рецепты командой /add_recipe.",
-            reply_markup=main_keyboard
+    try:
+        db = context.user_data.get('db')
+        if not db:
+            from database import Database
+            db = Database()
+            context.user_data['db'] = db
+        
+        # Get recipes filtered by category
+        recipes = db.get_recipes_by_category(category)
+        
+        if not recipes:
+            await update.message.reply_text(
+                f"📭 В категории {CATEGORY_TRANSLATIONS.get(category, category)} пока нет рецептов.\n"
+                "Попробуйте другую категорию или добавьте рецепты командой /add_recipe.",
+                reply_markup=main_keyboard
+            )
+            return
+        
+        # Select a random recipe from filtered results
+        import random
+        recipe = random.choice(recipes)
+        
+        category_name = CATEGORY_TRANSLATIONS.get(recipe["category"], recipe["category"])
+        url = recipe.get("url", "#")
+        message = (
+            f"🍽️ <b>{recipe['title']}</b>\n"
+            f"📂 Категория: {category_name}\n"
+            f"🔗 <a href='{url}'>Читать полный рецепт</a>\n\n"
+            "Что дальше?"
         )
-        return
-    
-    # Select a random recipe from filtered results
-    import random
-    recipe = random.choice(recipes)
-    
-    category_name = CATEGORY_TRANSLATIONS.get(recipe["category"], recipe["category"])
-    url = recipe.get("url", "#")
-    message = (
-        f"🍽️ <b>{recipe['title']}</b>\n"
-        f"📂 Категория: {category_name}\n"
-        f"🔗 <a href='{url}'>Читать полный рецепт</a>\n\n"
-        "Что дальше?"
-    )
-    
-    await update.message.reply_text(
-        message, 
-        parse_mode='HTML', 
-        reply_markup=main_keyboard,
-        disable_web_page_preview=False
-    )
+        
+        await update.message.reply_text(
+            message, 
+            parse_mode='HTML', 
+            reply_markup=main_keyboard,
+            disable_web_page_preview=False
+        )
+    except Exception as e:
+        logger.error(f"Error in filter_recipes_by_keyword: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("Произошла ошибка при обработке запроса. Попробуйте позже.")
+        except:
+            pass
 
 
 async def add_recipe_manual(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle manual recipe addition request."""
-    user = update.effective_user
-    db = context.user_data.get('db')
-    if not db:
-        from database import Database
-        db = Database()
-        context.user_data['db'] = db
-    
-    # Ensure user exists in database
-    db.ensure_user(user.id, user.username or "unknown")
-    
-    await update.message.reply_text(
-        "📝 Чтобы добавить свой рецепт, отправьте мне сообщение в следующем формате:\n\n"
-        "<b>Название рецепта</b>\n"
-        "<b>Ингредиенты:</b> список ингредиентов через запятую\n"
-        "<b>Время приготовления:</b> в минутах (число)\n"
-        "<b>Категория:</b> мясо/гарнир/вегетарианское/суп/десерт\n"
-        "<b>Источник:</b> (опционально) URL или описание источника\n\n"
-        "Пример:\n"
-        "Борщ украинский\n"
-        "Ингредиенты: свекла, капуста, картофель, лук, морковь, томатная паста\n"
-        "Время приготовления: 90\n"
-        "Категория: суп\n"
-        "Источник: мамина рецептная тетрадь\n\n"
-        "Отправьте рецепт одним сообщением, и я сохраню его для вас!",
-        parse_mode='HTML',
-        reply_markup=main_keyboard
-    )
+    try:
+        user = update.effective_user
+        db = context.user_data.get('db')
+        if not db:
+            from database import Database
+            db = Database()
+            context.user_data['db'] = db
+        
+        # Ensure user exists in database
+        db.ensure_user(user.id, user.username or "unknown")
+        
+        await update.message.reply_text(
+            "📝 Чтобы добавить свой рецепт, отправьте мне сообщение в следующем формате:\n\n"
+            "<b>Название рецепта</b>\n"
+            "<b>Ингредиенты:</b> список ингредиентов через запятую\n"
+            "<b>Время приготовления:</b> в минутах (число)\n"
+            "<b>Категория:</b> мясо/гарнир/вегетарианское/суп/десерт\n"
+            "<b>Источник:</b> (опционально) URL или описание источника\n\n"
+            "Пример:\n"
+            "Борщ украинский\n"
+            "Ингредиенты: свекла, капуста, картофель, лук, морковь, томатная паста\n"
+            "Время приготовления: 90\n"
+            "Категория: суп\n"
+            "Источник: мамина рецептная тетрадь\n\n"
+            "Отправьте рецепт одним сообщением, и я сохраню его для вас!",
+            parse_mode='HTML',
+            reply_markup=main_keyboard
+        )
+    except Exception as e:
+        logger.error(f"Error in add_recipe_manual: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("Произошла ошибка при обработке запроса. Попробуйте позже.")
+        except:
+            pass
 
 
 # ============================================================
@@ -303,189 +317,232 @@ async def add_recipe_manual(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command."""
-    user = update.effective_user
-    db = context.user_data.get('db')
-    if not db:
-        from database import Database
-        db = Database()
-        context.user_data['db'] = db
-    
-    # Ensure user exists in database
-    db.ensure_user(user.id, user.username or "unknown")
-    
-    welcome_text = (
-        f"👋 Привет, {user.first_name}!\n\n"
-        "Я твой кулинарный помощник! Я могу:\n"
-        "• Предлагать случайные рецепты\n"
-        "• Фильтровать блюда по категориям (мясо, гарнир и т.д.)\n"
-        "• Сохранять рецепты в твою личную коллекцию\n"
-        "• Показывать историю приготовленных блюд\n\n"
-        "Выбери действие ниже или напиши команду:"
-    )
-    
-    await update.message.reply_text(welcome_text, reply_markup=main_keyboard)
+    try:
+        logger.info(f"Received /start command from user {update.effective_user.id}")
+        user = update.effective_user
+        db = context.user_data.get('db')
+        if not db:
+            from database import Database
+            db = Database()
+            context.user_data['db'] = db
+        
+        # Ensure user exists in database
+        db.ensure_user(user.id, user.username or "unknown")
+        
+        welcome_text = (
+            f"👋 Привет, {user.first_name}!\n\n"
+            "Я твой кулинарный помощник! Я могу:\n"
+            "• Предлагать случайные рецепты\n"
+            "• Фильтровать блюда по категориям (мясо, гарнир и т.д.)\n"
+            "• Сохранять рецепты в твою личную коллекцию\n"
+            "• Показывать историю приготовленных блюд\n\n"
+            "Выбери действие ниже или напиши команду:"
+        )
+        
+        await update.message.reply_text(welcome_text, reply_markup=main_keyboard)
+    except Exception as e:
+        logger.error(f"Error in start_command: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("Произошла ошибка при обработке команды /start. Попробуйте позже.")
+        except:
+            pass
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command."""
-    help_text = (
-        "🗒️ <b>Список команд:</b>\n\n"
-        "/start - Начать работу с ботом\n"
-        "/choose_dish - Получить случайный рецепт\n"
-        "/filter - Фильтровать рецепты по категориям\n"
-        "/my_recipes - Показать мои сохраненные рецепты\n"
-        "/add_recipe - Добавить свой рецепт\n"
-        "/history - История приготовления\n\n"
-        "🔍 <b>Быстрые фильтры:</b>\n"
-        "• Нажмите кнопку '🥩 Мясо' — покажет только мясные блюда\n"
-        "• Нажмите кнопку '🥦 Гарнир' — покажет гарниры\n"
-        "• Нажмите '🎲 Случайное' — случайный рецепт из всех категорий\n\n"
-        "🌐 Источник рецептов: https://www.iamcook.ru/event/everyday/everyday-diet"
-    )
-    
-    await update.message.reply_text(help_text, parse_mode='HTML', reply_markup=main_keyboard)
+    try:
+        help_text = (
+            "🗒️ <b>Список команд:</b>\n\n"
+            "/start - Начать работу с ботом\n"
+            "/choose_dish - Получить случайный рецепт\n"
+            "/filter - Фильтровать рецепты по категориям\n"
+            "/my_recipes - Показать мои сохраненные рецепты\n"
+            "/add_recipe - Добавить свой рецепт\n"
+            "/history - История приготовления\n\n"
+            "🔍 <b>Быстрые фильтры:</b>\n"
+            "• Нажмите кнопку '🥩 Мясо' — покажет только мясные блюда\n"
+            "• Нажмите кнопку '🥦 Гарнир' — покажет гарниры\n"
+            "• Нажмите '🎲 Случайное' — случайный рецепт из всех категорий\n\n"
+            "🌐 Источник рецептов: https://www.iamcook.ru/event/everyday/everyday-diet"
+        )
+        
+        await update.message.reply_text(help_text, parse_mode='HTML', reply_markup=main_keyboard)
+    except Exception as e:
+        logger.error(f"Error in help_command: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("Произошла ошибка при обработке команды /help. Попробуйте позже.")
+        except:
+            pass
 
 
 async def choose_dish_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /choose_dish command - get random recipe."""
-    db = context.user_data.get('db')
-    if not db:
-        from database import Database
-        db = Database()
-        context.user_data['db'] = db
-    
-    # Try to fetch new recipes from source
-    fetched_recipes = await fetch_recipes_from_source()
-    
-    if fetched_recipes:
-        # Save fetched recipes to database
-        for recipe in fetched_recipes:
-            db.upsert_recipe(
-                title=recipe["title"],
-                source_url=recipe["url"],
-                category=recipe["category"],
-                source="iamcook.ru"
-            )
+    try:
+        db = context.user_data.get('db')
+        if not db:
+            from database import Database
+            db = Database()
+            context.user_data['db'] = db
         
-        # Get a random recipe (could be from fetched or existing)
-        import random
-        all_recipes = db.get_recipes_by_category("all")
-        if all_recipes:
-            recipe = random.choice(all_recipes)
+        # Try to fetch new recipes from source
+        fetched_recipes = await fetch_recipes_from_source()
+        
+        if fetched_recipes:
+            # Save fetched recipes to database
+            for recipe in fetched_recipes:
+                db.upsert_recipe(
+                    title=recipe["title"],
+                    source_url=recipe["url"],
+                    category=recipe["category"],
+                    source="iamcook.ru"
+                )
+            
+            # Get a random recipe (could be from fetched or existing)
+            import random
+            all_recipes = db.get_recipes_by_category("all")
+            if all_recipes:
+                recipe = random.choice(all_recipes)
+            else:
+                await update.message.reply_text("❌ Ошибка: не удалось загрузить рецепты. Попробуйте позже.")
+                return
         else:
-            await update.message.reply_text("❌ Ошибка: не удалось загрузить рецепты. Попробуйте позже.")
-            return
-    else:
-        # Get from existing database
-        all_recipes = db.get_recipes_by_category("all")
-        if not all_recipes:
-            await update.message.reply_text(
-                "📭 Рецепты еще не добавлены.\n"
-                "Используйте кнопку '➕ Добавить рецепт' или команда /add_recipe, "
-                "или яFETCH новый рецепт с iamcook.ru"
-            )
-            return
-        recipe = random.choice(all_recipes)
-    
-    # Format recipe message
-    category_name = CATEGORY_TRANSLATIONS.get(recipe["category"], recipe["category"])
-    url = recipe.get("url", "#")
-    message = (
-        f"🍽️ <b>{recipe['title']}</b>\n"
-        f"📂 Категория: {category_name}\n"
-        f"🔗 <a href='{url}'>Читать полный рецепт на iamcook.ru</a>\n\n"
-        "Что сделаем дальше?\n"
-        "• Сохранить в мои рецепты ✅\n"
-        "• Еще один случайный 🎲\n"
-        "• Фильтровать по категории 🔍"
-    )
-    
-    await update.message.reply_text(
-        message, 
-        parse_mode='HTML', 
-        reply_markup=main_keyboard,
-        disable_web_page_preview=False
-    )
+            # Get from existing database
+            all_recipes = db.get_recipes_by_category("all")
+            if not all_recipes:
+                await update.message.reply_text(
+                    "📭 Рецепты еще не добавлены.\n"
+                    "Используйте кнопку '➕ Добавить рецепт' или команда /add_recipe, "
+                    "или яFETCH новый рецепт с iamcook.ru"
+                )
+                return
+            recipe = random.choice(all_recipes)
+        
+        # Format recipe message
+        category_name = CATEGORY_TRANSLATIONS.get(recipe["category"], recipe["category"])
+        url = recipe.get("url", "#")
+        message = (
+            f"🍽️ <b>{recipe['title']}</b>\n"
+            f"📂 Категория: {category_name}\n"
+            f"🔗 <a href='{url}'>Читать полный рецепт на iamcook.ru</a>\n\n"
+            "Что сделаем дальше?\n"
+            "• Сохранить в мои рецепты ✅\n"
+            "• Еще один случайный 🎲\n"
+            "• Фильтровать по category 🔍"
+        )
+        
+        await update.message.reply_text(
+            message, 
+            parse_mode='HTML', 
+            reply_markup=main_keyboard,
+            disable_web_page_preview=False
+        )
+    except Exception as e:
+        logger.error(f"Error in choose_dish_command: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("Произошла ошибка при обработке команды /choose_dish. Попробуйте позже.")
+        except:
+            pass
 
 
 async def filter_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /filter command - show category filtering options."""
-    filter_text = (
-        "🔍 <b>Фильтрация рецептов</b>\n\n"
-        "Выберите категорию, чтобы narrow down рецепты:\n\n"
-        "• <b>Мясо</b> — мясные блюда (говядина, свинина, курица)\n"
-        "• <b>Гарнир</b> — гарниры (картофель, рис, гречка)\n"
-        "• <b>Вегетарианское</b> — вегетарианские блюда\n"
-        "• <b>Суп</b> — супы и первые блюда\n"
-        "• <b>Десерт</b> — сладкие блюда и пироги\n"
-        "• <b>Все рецепты</b> — показать все доступные рецепты\n\n"
-        "Или нажмите одну из быстрых кнопок ниже:"
-    )
-    
-    await update.message.reply_text(
-        filter_text, 
-        parse_mode='HTML', 
-        reply_markup=get_category_buttons(["All", "meat", "garnish", "vegetarian", "soup", "dessert"])
-    )
+    try:
+        filter_text = (
+            "🔍 <b>Фильтрация рецептов</b>\n\n"
+            "Выберите категорию, чтобы narrow down рецепты:\n\n"
+            "• <b>Мясо</b> — мясные блюда (говядина, свинина, курица)\n"
+            "• <b>Гарнир</b> — гарниры (картофель, рис, гречка)\n"
+            "• <b>Вегетарианское</b> — вегетарианские блюда\n"
+            "• <b>Суп</b> — супы и первые блюда\n"
+            "• <b>Десерт</b> — сладкие блюда и пироги\n"
+            "• <b>Все рецепты</b> — показать все доступные рецепты\n\n"
+            "Или нажмите одну из быстрых кнопок ниже:"
+        )
+        
+        await update.message.reply_text(
+            filter_text, 
+            parse_mode='HTML', 
+            reply_markup=get_category_buttons(["All", "meat", "garnish", "vegetarian", "soup", "dessert"])
+        )
+    except Exception as e:
+        logger.error(f"Error in filter_command: {e}", exc_info=True)
+        try:
+            await update.message.reply_text("Произошла ошибка при обработке команды /filter. Попробуйте позже.")
+        except:
+            pass
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle inline button callbacks for filtering."""
-    query = update.callback_query
-    await query.answer()
-    
-    data = query.data
-    category_map = {
-        "filter_all": "all",
-        "filter_meat": "meat", 
-        "filter_garnish": "garnish",
-        "filter_vegetarian": "vegetarian",
-        "filter_soup": "soup",
-        "filter_dessert": "dessert"
-    }
-    
-    category = category_map.get(data, "all")
-    db = context.user_data.get('db')
-    if not db:
-        from database import Database
-        db = Database()
-        context.user_data['db'] = db
-    
-    # Get recipes filtered by category
-    recipes = db.get_recipes_by_category(category)
-    
-    if not recipes:
-        await query.edit_message_text(
-            f"📭 В категории {CATEGORY_TRANSLATIONS.get(category, category)} пока нет рецептов.\n"
-            "Попробуйте другую категорию или добавьте рецепты командой /add_recipe.",
-            reply_markup=main_keyboard
+    try:
+        query = update.callback_query
+        await query.answer()
+        
+        data = query.data
+        category_map = {
+            "filter_all": "all",
+            "filter_meat": "meat", 
+            "filter_garnish": "garnish",
+            "filter_vegetarian": "vegetarian",
+            "filter_soup": "soup",
+            "filter_dessert": "dessert"
+        }
+        
+        category = category_map.get(data, "all")
+        db = context.user_data.get('db')
+        if not db:
+            from database import Database
+            db = Database()
+            context.user_data['db'] = db
+        
+        # Get recipes filtered by category
+        recipes = db.get_recipes_by_category(category)
+        
+        if not recipes:
+            await query.edit_message_text(
+                f"📭 В категории {CATEGORY_TRANSLATIONS.get(category, category)} пока нет рецептов.\n"
+                "Попробуйте другую категорию или добавьте рецепты командой /add_recipe.",
+                reply_markup=main_keyboard
+            )
+            return
+        
+        # Select a random recipe from filtered results
+        import random
+        recipe = random.choice(recipes)
+        
+        category_name = CATEGORY_TRANSLATIONS.get(recipe["category"], recipe["category"])
+        url = recipe.get("url", "#")
+        message = (
+            f"🍽️ <b>{recipe['title']}</b>\n"
+            f"📂 Категория: {category_name}\n"
+            f"🔗 <a href='{url}'>Читать полный рецепт</a>\n\n"
+            "Что дальше?"
         )
-        return
-    
-    # Select a random recipe from filtered results
-    import random
-    recipe = random.choice(recipes)
-    
-    category_name = CATEGORY_TRANSLATIONS.get(recipe["category"], recipe["category"])
-    url = recipe.get("url", "#")
-    message = (
-        f"🍽️ <b>{recipe['title']}</b>\n"
-        f"📂 Категория: {category_name}\n"
-        f"🔗 <a href='{url}'>Читать полный рецепт</a>\n\n"
-        "Что дальше?"
-    )
-    
-    await query.edit_message_text(
-        message, 
-        parse_mode='HTML', 
-        reply_markup=main_keyboard,
-        disable_web_page_preview=False
-    )
+        
+        await query.edit_message_text(
+            message, 
+            parse_mode='HTML', 
+            reply_markup=main_keyboard,
+            disable_web_page_preview=False
+        )
+    except Exception as e:
+        logger.error(f"Error in button_callback: {e}", exc_info=True)
+        try:
+            await query.edit_message_text("Произошла ошибка при обработке запроса. Попробуйте позже.")
+        except:
+            pass
 
 
 # ============================================================
 # Main Application
 # ============================================================
+
+def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log the error and send a telegram message to notify the developer."""
+    logger.error(msg="Exception while handling an update:", exc_info=context.error)
+    # Optionally, you can send a message to a developer chat here
+    # but we'll just log for now.
+
 
 def main() -> None:
     """Start the bot with health check server."""
@@ -517,6 +574,9 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.Regex("🎲 Случайное"), lambda u, c: choose_dish_command(u, c)))
     application.add_handler(MessageHandler(filters.Regex("➕ Добавить рецепт"), lambda u, c: add_recipe_manual(u, c)))
     application.add_handler(MessageHandler(filters.Regex("❓ Помощь"), lambda u, c: help_command(u, c)))
+    
+    # Add error handler
+    application.add_error_handler(error_handler)
     
     # Start the bot with polling mode
     logger.info("Starting bot with polling mode...")
